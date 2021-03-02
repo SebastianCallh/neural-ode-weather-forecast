@@ -43,9 +43,21 @@ function preprocess(raw_df, num_train=20)
 
     rename!(df, vcat([:year, :month, :date], features))
     df[!, :split] = [t <= num_train ? "train" : "test" for t in 1:size(df, 1)]
-    rescale!(df[!, :date])
-    rescale!(df[!, features])
-    df
+    df_train, df_test = groupby(df, "split")
+    t_train = df_train[!, :date]'
+    y_train = Matrix(df_train[!, features])'
+    t_test = df_test[!, :date]'
+    y_test = Matrix(df_test[!, features])'
+
+    date_trans = FeatureNormalizer(t_train)
+    feature_trans = FeatureNormalizer(y_train)
+
+    return (vec(predict(date_trans, t_train)),
+        predict(feature_trans, y_train),
+        vec(predict(date_trans, t_test)),
+        predict(feature_trans, y_test),
+        date_trans,
+        feature_trans)
 end
 
 end
