@@ -1,5 +1,6 @@
-using Flux, DiffEqFlux, DifferentialEquations
-using DataFrames, Random, BSON
+using Flux, DiffEqFlux, DifferentialEquations, DataFrames, Random
+using BSON: @save, @load
+GR.inline("png") # https://github.com/JuliaPlots/Plots.jl/issues/1723
 
 include("../src/delhi.jl")
 include("../src/figures.jl")
@@ -51,9 +52,11 @@ Random.seed!(1)
 t_train, y_train, t_test, y_test, t_trans, y_trans = Delhi.preprocess(Delhi.load())
 obs_grid = 4:4:length(t_train) # we train on an increasing amount of the first k obs
 θs, losses = train(t_train, y_train, obs_grid; progress=true)
-bson("artefacts/training_output.bson", params=θs, losses=losses)
+@save "artefacts/training_output.bson" θs losses
 
 @info "Generating training animation..."
+@load "artefacts/training_output.bson" θs losses
+
 predict(y0, t, θ) = begin
     node = neural_ode(t, length(y0))
     ŷ = Array(node(y0, θ))
@@ -81,10 +84,10 @@ rescale_y(x) = y_trans.scale .* x .+ y_trans.offset
 plot_frame(t, y, θ, loss) = plot_pred(
     t, y, t_train_grid, rescale_t, rescale_y, num_iters, θ, loss
 )
-anim = animate_training(plot_frame, t_train, y_train, θs, losses, obs_grid)
+anim = animate_training(plot_frame, t_train, y_train, θs, losses, obs_grid);
 gif(anim, "plots/training.gif")
 
-@info "Generating plot on extrapolation..."
+@info "Generating extrapolation plot..."
 t_grid = collect(range(minimum(t_train), maximum(t_test), length=500))
 ŷ = predict(y_train[:,1], t_grid, θs[end])
 plt_ext = plot_extrapolation(
@@ -94,7 +97,7 @@ plt_ext = plot_extrapolation(
     rescale_y(y_test),
     rescale_t(t_grid),
     rescale_y(ŷ)
-)
+);
 savefig(plt_ext, "plots/extrapolation.svg")
 
 @info "Done!"
