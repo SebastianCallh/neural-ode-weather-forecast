@@ -2,18 +2,18 @@ using Plots
 include("delhi.jl")
 
 function plot_pred(t, y, ŷ)
-    plt = scatter(t, y, label="Observation")
-    plot!(plt, t, ŷ, label="Prediction")
+    plt = Plots.scatter(t, y, label="Observation")
+    Plots.plot!(plt, t, ŷ, label="Prediction")
 end
 
 function plot_pred(t, y, t̂, ŷ; kwargs...)
     plot_params = zip(eachrow(y), eachrow(ŷ), Delhi.feature_names, Delhi.units)
     plts_preds = map(enumerate(plot_params)) do (i, (yᵢ, ŷᵢ, name, unit))
-        plt = plot(
+        plt = Plots.plot(
             t̂, ŷᵢ, label="Prediction", color=i, linewidth=3,
             legend=nothing, title=name; kwargs...
         )
-        scatter!(
+        Plots.scatter!(
             plt, t, yᵢ, label="Observation",
             xlabel="Time", ylabel=unit,
             markersize=5, color=i
@@ -29,13 +29,13 @@ function plot_result(t, y, t̂, ŷ, loss, num_iters; kwargs...)
     plot!(plts_preds[3], ylim=(2, 12))
     plot!(plts_preds[4], ylim=(990, 1025))
 
-    p_loss = plot(
+    p_loss = Plots.plot(
         loss, label=nothing, linewidth=3,
         title="Loss", xlabel="Iterations",
         xlim=(0, num_iters)
     )
     plots = [plts_preds..., p_loss]
-    plt = plot(plots..., layout=grid(length(plots), 1), size=(900, 900))
+    plt = Plots.plot(plots..., layout=grid(length(plots), 1), size=(900, 900))
 end
 
 function animate_training(plot_frame, t_train, y_train, θs, losses, obs_grid; pause_for=300)
@@ -51,12 +51,12 @@ end
 function plot_extrapolation(t_train, y_train, t_test, y_test, t̂, ŷ)
     plts = plot_pred(t_train, y_train, t̂, ŷ)
     for (i, (plt, y)) in enumerate(zip(plts, eachrow(y_test)))
-        scatter!(plt, t_test, y, color=i, markerstrokecolor=:white, label="Test observation")
+        Plots.scatter!(plt, t_test, y, color=i, markerstrokecolor=:white, label="Test observation")
     end
 
     plot!(plts[1], ylim=(10, 40), legend=:topleft)
     plot!(plts[2], ylim=(20, 100))
     plot!(plts[3], ylim=(2, 12))
     plot!(plts[4], ylim=(990, 1025))
-    plot(plts..., layout=grid(length(plts), 1), size=(900, 900))
+    Plots.plot(plts..., layout=grid(length(plts), 1), size=(900, 900))
 end
