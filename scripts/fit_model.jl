@@ -1,6 +1,5 @@
 using Flux, DiffEqFlux, DifferentialEquations, DataFrames, Random
 using BSON: @save, @load
-GR.inline("png") # https://github.com/JuliaPlots/Plots.jl/issues/1723
 
 include("../src/delhi.jl")
 include("../src/figures.jl")
