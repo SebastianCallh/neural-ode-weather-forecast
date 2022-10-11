@@ -1,5 +1,5 @@
 module Delhi
-using DataFrames, CSV, Dates, Statistics, Plots, MLDataUtils
+using DataFrames, CSV, Dates, Statistics, Plots
 
 
 features = [:meantemp, :humidity, :wind_speed, :meanpressure]
@@ -27,6 +27,12 @@ function plot_features(df)
     plot(plots..., layout=(Int(n / 2), Int(n / 2)))
 end
 
+function normalize(x)
+    μ = mean(x; dims=2)
+    σ = std(x; dims=2)
+    z = (x .- μ) ./ σ
+    return z, μ, σ
+end
 
 function preprocess(raw_df, num_train=20)
     raw_df[:,:year] = Float64.(year.(raw_df[:,:date]))
@@ -44,16 +50,16 @@ function preprocess(raw_df, num_train=20)
     t_and_y(df) = df[!, :date]', Matrix(df[!, features])'
     t_train, y_train = t_and_y(df[1:num_train,:])
     t_test, y_test = t_and_y(df[num_train+1:end,:])    
-    t_trans = FeatureNormalizer(t_train)
-    y_trans = FeatureNormalizer(y_train)
+    t_train, t_mean, t_scale = normalize(t_train)
+    y_train, y_mean, y_scale = normalize(y_train)
+    t_test = (t_test .- t_mean) ./ t_scale
+    y_test = (y_test .- y_mean) ./ y_scale
 
     return (
-        vec(predict(t_trans, t_train)),
-        predict(y_trans, y_train),
-        vec(predict(t_trans, t_test)),
-        predict(y_trans, y_test),
-        t_trans,
-        y_trans
+        vec(t_train), y_train,
+        vec(t_test),  y_test,
+        (t_mean, t_scale),
+        (y_mean, y_scale)
     )
 end
 
