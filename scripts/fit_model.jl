@@ -1,18 +1,20 @@
 using Random
+using Dates
 using Optimization
 using Lux
 using DiffEqFlux: NeuralODE, ADAMW, swish
 using DifferentialEquations
+using ComponentArrays
 using BSON: @save, @load
 
-include("../src/delhi.jl")
-include("../src/figures.jl")
+include(joinpath("..", "src", "delhi.jl"))
+include(joinpath("..", "src", "figures.jl"))
 
 function neural_ode(t, data_dim)
-    f = Chain(
-        Dense(data_dim, 64, swish),
-        Dense(64, 32, swish),
-        Dense(32, data_dim)
+    f = Lux.Chain(
+        Lux.Dense(data_dim, 64, swish),
+        Lux.Dense(64, 32, swish),
+        Lux.Dense(32, data_dim)
     )
 
     node = NeuralODE(
@@ -24,7 +26,7 @@ function neural_ode(t, data_dim)
     rng = Random.default_rng()
     p, state = Lux.setup(rng, f)
 
-    return node, Lux.ComponentArray(p), state
+    return node, ComponentArray(p), state
 end
 
 function train_one_round(node, θ, state, y, opt, maxiters, rng, y0=y[:, 1]; kwargs...)
@@ -46,7 +48,7 @@ function train(t, y, obs_grid, maxiters, lr, rng, θ=nothing, state=nothing; kwa
         false
     end
 
-    θs, losses = Lux.ComponentArray[], Float32[]
+    θs, losses = ComponentArray[], Float32[]
     for k in obs_grid
         node, θ_new, state_new = neural_ode(t, size(y, 1))
         if θ === nothing θ = θ_new end
@@ -62,16 +64,55 @@ function train(t, y, obs_grid, maxiters, lr, rng, θ=nothing, state=nothing; kwa
 end
 
 @info "Fitting model..."
-rng = Random.default_rng()
-t_train, y_train, t_test, y_test, (t_mean, t_scale), (y_mean, y_scale) = Delhi.preprocess(Delhi.load())
+rng = MersenneTwister(123)
+df = Delhi.load()
+plt_features = Delhi.plot_features(df)
+savefig(plt_features, joinpath("plots", "features.svg"))
+
+df_2016 = filter(x -> x.date < Date(2016, 1, 1), df)
+plt_2016 = plot(
+    df_2016.date,
+    df_2016.meanpressure,
+    title = "Mean pressure, before 2016",
+    ylabel = Delhi.units[4],
+    xlabel = "Time",
+    color = 4,
+    size = (600, 300),
+    label = nothing,
+    right_margin=5Plots.mm
+)
+savefig(plt_2016, joinpath("plots", "zoomed_pressure.svg"))
+
+t_train, y_train, t_test, y_test, (t_mean, t_scale), (y_mean, y_scale) = Delhi.preprocess(df)
+
+plt_split = plot(
+    reshape(t_train, :), y_train',
+    linewidth = 3, colors = 1:4,
+    xlabel = "Normalized time", ylabel = "Normalized values",
+    label = nothing, title = "Pre-processed data"
+)
+plot!(
+    plt_split, reshape(t_test, :), y_test',
+    linewidth = 3, linestyle = :dash,
+    color = [1 2 3 4], label = nothing
+)
+
+plot!(
+    plt_split, [0], [0], linewidth = 0,
+    label = "Train", color = 1
+)
+plot!(
+    plt_split, [0], [0], linewidth = 0,
+    linestyle = :dash, label = "Test",
+    color = 1
+)
+savefig(plt_split, joinpath("plots", "train_test_split.svg"))
+
 obs_grid = 4:4:length(t_train) # we train on an increasing amount of the first k obs
 maxiters = 150
 lr = 5e-3
 θs, state, losses = train(t_train, y_train, obs_grid, maxiters, lr, rng, progress=true);
 @save "artefacts/training_output.bson" θs losses
-
-@info "Generating training animation..."
-@load "artefacts/training_output.bson" θs losses
 
 predict(y0, t, θ, state) = begin
     node, _, _ = neural_ode(t, length(y0))
@@ -93,6 +134,7 @@ function plot_pred(
     )
 end
 
+@info "Generating training animation..."
 num_iters = length(losses)
 t_train_grid = collect(range(extrema(t_train)..., length=500))
 rescale_t(x) = t_scale .* x .+ t_mean
